@@ -7,4 +7,4 @@ are hosted here.
 If parts of the MATLAB code are used for publication,
 please cite the work!
 
-Atsushi Takagi
+by Atsushi Takagi
