@@ -7,7 +7,7 @@ are hosted here.
 If parts of the MATLAB code are used for publication,
 please mention in the acknowledgements!
 
-As of 15 September 2022 the entries are:
+As of 15 September 2022 the following code is available:
 
 - Kalman filter basics
 
