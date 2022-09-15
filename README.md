@@ -11,7 +11,7 @@ As of 15 September 2022 the entries are:
 
 - Kalman filter basics
 
-Learn how to implement a Kalman filter to obtain model-based estimates from noisy measurements, and to fuse measurements from multiple sensors.
+  Learn how to implement a Kalman filter to obtain model-based estimates from noisy measurements, and to fuse measurements from multiple sensors.
 
 - Finite horizion Linear Quadratic Regulator (simulation of one-dimensional reaching)
 
