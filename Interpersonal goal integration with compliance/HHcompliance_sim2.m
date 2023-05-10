@@ -183,8 +183,8 @@ ColSRecipY = 14;
 ColDRecipG = 15;
 ColDRecipY = 16;
 ColStiffness = 17;
-ColTimeWindow = 18;
 ColDyad = 18;
+ColSex = 20; % 0: male, 1: female
 
 % Get data from connection stiffness
 SelectStiff = @(Data,ColData,Stiffness)Data(Data(:,ColStiffness)==Stiffness,ColData);
