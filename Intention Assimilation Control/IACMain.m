@@ -80,7 +80,7 @@ x(:,1) = zeros(size(A,1),1);
 for i=2:length(Time)-1
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % TARGET ESTIMATED USING ROBOT CONTROLLER GAIN
+    % TARGET ESTIMATED USING CORRECT GAIN
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Internal model to estimate target
     InternalModel = @(xTarget)[xTarget(1,:); (xTarget(1,:)-x(1,i))*LRobot(1,1)+(0-x(2,i))*LRobot(1,2)];
@@ -99,7 +99,7 @@ for i=2:length(Time)-1
     %%%%%%%%%%%%%%%%%%%%%%%
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % TARGET ESTIMATED USING ROBOT CONTROLLER GAIN
+    % TARGET ESTIMATED USING INCORRECT GAIN
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Internal model to estimate target
     InternalModel = @(xTarget)[xTarget(1,:); (xTarget(1,:)-x(1,i))*LRobot2(1,1)+(0-x(2,i))*LRobot2(1,2)];
@@ -118,7 +118,7 @@ for i=2:length(Time)-1
     %%%%%%%%%%%%%%%%%%%%%%%
     
     % Robot control policy
-    TargetRobotEstimate(1,i) = xHat(1,i); % control mirroring
+    TargetRobotEstimate(1,i) = xHat(1,i);
     
     % Human control policy
     uHuman(:,i) = -LHuman*(x(:,i)-TargetHuman(:,i));
@@ -149,14 +149,13 @@ pbaspect([2,1,1]);
 %% NEGOTIATION SIMULATION
 
 % CHOOSE HUMAN AND ROBOT TARGETS
-TargetHuman = 0.3*ones(1,length(Time));%+0.1*sin(2*pi*Time);
-TargetRobot = -0.3*ones(1,length(Time));%+0.1*sin(2*pi*Time);
+TargetHuman = 0.3*ones(1,length(Time));
+TargetRobot = -0.3*ones(1,length(Time));
 
 % Actual controller gain
-%LHuman = dlqr(A,B,diag([150*rand(1),1*rand(1)]),0.01)
 QHuman = diag([100,0*rand(1)]);
 LHuman = dlqr(A,B,QHuman,RHuman)
-% Guess
+% Guess (once again wrong, but doesn't have to be right as it converges eventually)
 QRobot = diag([500,0*rand(1)]);
 LRobot = dlqr(A,B,QRobot,RRobot)
 
@@ -164,29 +163,33 @@ LRobot = dlqr(A,B,QRobot,RRobot)
 PRobot = repmat(1*diag(ones(1,size(AKF,1))),1,1);
 PHuman = PRobot;
 
+% Preallocate arrays
 xHatHuman = xHat;
 xHatRobot = xHat;
 xCoactivity = x;
 xHumanSolo = x;
 xRobotSolo = x;
 xPassiveFollow = x;
-
 xNegotiate = zeros(size(A,1),length(Time),3);
 uRobotNegotiate = zeros(1,length(Time),3); uHumanNegotiate = uRobotNegotiate;
-
 uRobot = uHuman;
 
-% Simulate movement
+% Simulate movement for different scenarios
 for s=1:3
     
     switch s
         case 1
+            % Robot assists human to reach their target
             LambdaRobot = 0;
             LambdaHuman = 1;
         case 2
+            % Coactivity human and robot each their targets, essentially
+            % ignoring each other. Final position will depend on their
+            % relative controller gain size.
             LambdaRobot = 1;
             LambdaHuman = 1;
         case 3
+            % Robot competes with human to reach the robot's target
             LambdaRobot = 2;
             LambdaHuman = 1;
     end
@@ -244,25 +247,6 @@ for s=1:3
     end
 end
     
-for i=2:length(Time)-1
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    
-    uRobot = -LRobot*(xPassiveFollow(:,i)-[xPassiveFollow(1,i); 0]);
-    uHumanPassiveFollow(1,i) = -LHuman*(xPassiveFollow(:,i)-[TargetHuman(1,i); 0]);
-    xPassiveFollow(:,i+1) = A*xPassiveFollow(:,i)+B*(uRobot+uHumanPassiveFollow(1,i));
-    
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Human alone system update
-    uHumanSolo(:,i) = -LHuman*(xHumanSolo(:,i)-[TargetHuman(1,i);0]);
-    xHumanSolo(:,i+1) = A*xHumanSolo(:,i)+B*uHumanSolo(:,i);
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % Robot alone system update
-    uRobotSolo(:,i) = -LRobot*(xRobotSolo(:,i)-[TargetRobot(1,i);0]);
-    xRobotSolo(:,i+1) = A*xRobotSolo(:,i)+B*uRobotSolo(:,i);
-    
-end
-
 %% FIGURE: NEGOTIATION
 figure(2); clf(2); set(gcf,'color','w'); hold on; set(gca,'fontsize',20,'FontName','Arial'); box on; hold on;
 
@@ -285,7 +269,28 @@ ylabel('x (m)');
 xlabel('Time (s)');
 pbaspect([2,1,1]);
 
+%% SIMULATE HUMAN REACHING ALONE, OR WITH COLLABORATIVE IAC, OR WITH PASSIVE FOLLOWER
+
+for i=2:length(Time)-1
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+    uRobot = -LRobot*(xPassiveFollow(:,i)-[xPassiveFollow(1,i); 0]);
+    uHumanPassiveFollow(1,i) = -LHuman*(xPassiveFollow(:,i)-[TargetHuman(1,i); 0]);
+    xPassiveFollow(:,i+1) = A*xPassiveFollow(:,i)+B*(uRobot+uHumanPassiveFollow(1,i));
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % Human alone system update
+    uHumanSolo(:,i) = -LHuman*(xHumanSolo(:,i)-[TargetHuman(1,i);0]);
+    xHumanSolo(:,i+1) = A*xHumanSolo(:,i)+B*uHumanSolo(:,i);
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % Robot alone system update
+    uRobotSolo = -LRobot*(xRobotSolo(:,i)-[TargetRobot(1,i);0]);
+    xRobotSolo(:,i+1) = A*xRobotSolo(:,i)+B*uRobotSolo;
+    
+end
 %% FIGURE: COMPARISON WITH OTHER STRATEGIES
+
 figure(3); clf(3); set(gcf,'color','w'); hold on; set(gca,'fontsize',15,'FontName','Arial'); box on; hold on;
 
 subplot(2,1,1); set(gca,'fontsize',20,'FontName','Arial'); box on; hold on;
@@ -315,7 +320,7 @@ ylim([-5,10]);
 ylabel('u_h (N)');
 xlabel('Time (s)');
 
-%% COLLISION AVOIDANCE VIA COMPETITION
+%% COLLISION AVOIDANCE VIA COMPETITIVE IAC
 
 xWall = 0.06;
 
@@ -356,14 +361,12 @@ xHatRobot2 = xHat;
 P2 = P;
 for i=2:length(Time)-1
     
+    % This is human's target
     if i<1/dt
         TargetHumanCollide(1,i) = (0.15/1) * i*dt;
     else
         TargetHumanCollide(1,i) = max(0,-(0.15/1) * (i*dt-1) + 0.15);
-    end
-    
-    %TargetHumanCollide(1,i) = 0.1*sin(2*pi*3*i*dt-pi/2)+0.2;
-        
+    end       
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % TARGET ESTIMATED USING ROBOT CONTROLLER GAIN
@@ -423,6 +426,8 @@ for i=2:length(Time)-1
     xCollisionHomotopy(:,i+1) = A*xCollisionHomotopy(:,i)+B*(uRobotCollisionHomotopy(:,i) + uHumanCollisionHomotopy(:,i));
 end
 
+%% FIGURE: HOMOTOPY DOES NOT PREVENT COLLISION WITH WALL, BUT COMPETITIVE IAC DOES
+
 figure(4); clf(4); set(gcf,'color','w'); hold on; set(gca,'fontsize',15,'FontName','Arial'); box on; hold on;
 
 subplot(2,1,1); set(gca,'fontsize',20,'FontName','Arial'); box on; hold on;
@@ -435,32 +440,14 @@ hCollision(5)=plot(Time,xCollisionHomotopy(1,:),'b','linewidth',2);
 
 plot(Time(1:end-1),TargetHumanCollide,'k','linewidth',0.5);
 
-
 text(0.11,xWall*1.4,'$\tau_{\textup{wall}}$','interpreter','latex','fontsize',20,'color','r');
 hText=text(0.8,0.11,'$\tau_h$','interpreter','latex','fontsize',20);
 set(hText,'Rotation',25);
 set(gca,'xtick',0:0.5:3);
 ylim([-0.02,0.25]);
 legend(hCollision,'$\hat{\tau}_{h}\,(||L^{v}_h||>||L_h||)$','$\hat{\tau}_{h}\,(||L^{v}_h||<||L_h||)$','$\textup{IAC}\,(||L^{v}_h||>||L_h||)$','$\textup{IAC}\,(||L^{v}_h||<||L_h||)$','$\textup{Homotopy}$','interpreter','latex'); legend boxoff;
-%legend(hCollision(2:end),'$\textup{IAR}$','$\textup{Homotopy}$','interpreter','latex'); legend boxoff;
 ylabel('x (m)');
-%xlabel('Time (s)');
-%pbaspect([2,1,1]);
-%{
-subplot(3,1,2); set(gca,'fontsize',20,'FontName','Arial'); box on; hold on;
-plot(Time(2:end-1),uHumanCollision(1,2:end),'k','linewidth',1);
-plot(Time(2:end-1),uRobotCollision(1,2:end),'--k','linewidth',1);
-plot(Time(2:end-1),uHumanCollisionHomotopy(1,2:end),'b','linewidth',1);
-plot(Time(2:end-1),uRobotCollisionHomotopy(1,2:end),'--b','linewidth',1);
-line([0,3],[0,0],'color','k');
-legend('human','robot','location','best'); legend boxoff;
-set(gca,'xtick',0:0.5:3);
-ylim([-1,1]*5);
-ylabel('u (N)');
-%xlabel('Time (s)');
-%}
 subplot(2,1,2); set(gca,'fontsize',20,'FontName','Arial'); box on; hold on;
-%line([0,2],[0,0],'color','k');
 plot(Time(2:end-1),LambdaRobotCollision(1,2:end),'k','linewidth',2);
 plot(Time(2:end-1),LambdaRobotCollision2(1,2:end),':k','linewidth',2);
 legend('$||L^{v}_h||>||L_h||$','$||L^{v}_h||<||L_h||$','interpreter','latex'); legend boxoff;
@@ -468,16 +455,5 @@ set(gca,'xtick',0:0.5:3);
 ylim([-0.5,2.5]);
 ylabel({'$\lambda$'},'Interpreter','latex');
 xlabel('Time (s)');
-
-
-
-
-
-
-
-
-
-
-
 
 
